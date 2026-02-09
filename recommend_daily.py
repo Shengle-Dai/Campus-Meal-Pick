@@ -23,6 +23,7 @@ API_URL = "https://eatery-blue-backend.cornellappdev.com/eatery/"
 LOCAL_TZ = ZoneInfo("America/New_York")
 
 CAMPUS_AREA_ALLOWLIST = {"West"}
+EATERY_DENYLIST = {"104West!"}
 PROMPT_PATH = "prompt.md"
 
 # “Today” meal windows (local time). Adjust if desired.
@@ -148,6 +149,8 @@ def extract_menu_slices(
     for e in eateries:
         try:
             if e.get("campus_area") not in CAMPUS_AREA_ALLOWLIST:
+                continue
+            if e.get("name") in EATERY_DENYLIST:
                 continue
 
             name = e.get("name") or "Unknown"
