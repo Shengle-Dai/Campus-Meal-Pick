@@ -9,14 +9,12 @@ Constraints:
 User profile:
 
 - Chinese international student
-- Likes: french fries, drumsticks, typical Chinese food
+- Likes: french fries, drumsticks, typical Chinese food, meat burgers, pho.
 - Dislikes: buffalo sauce
 
 Decision rules:
 
 - Prioritize Chinese/Asian comfort foods (noodles, congee, fried rice, stir-fry, dumplings, etc.).
-- Strongly prefer french fries and drumsticks when present.
-- Penalize anything explicitly buffalo/buffalo sauce.
 - Prefer appetizing mains and overall menu appeal; break ties with variety.
 
 Output must be valid JSON:
