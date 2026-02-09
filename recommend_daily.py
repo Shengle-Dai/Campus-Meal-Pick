@@ -273,20 +273,24 @@ def build_email(
 
     def _pick_html(rank: int, pick: Dict[str, Any]) -> str:
         name = pick.get("eatery", "")
-        why = pick.get("why", "")
+        dishes = pick.get("dishes", [])
         labels = {0: "#1 Pick", 1: "#2 Pick", 2: "#3 Pick"}
         colors = {0: "#d35400", 1: "#7f8c8d", 2: "#7f8c8d"}
         label = labels.get(rank, f"#{rank+1} Pick")
         color = colors.get(rank, "#7f8c8d")
         location = loc.get(name, "")
         loc_line = f'<div style="color:#888;font-size:13px;">{location}</div>' if location else ""
+        dishes_line = ""
+        if dishes:
+            items_html = "".join(f"<li>{d}</li>" for d in dishes)
+            dishes_line = f'<ul style="color:#555;font-size:13px;margin:4px 0 0 0;padding-left:20px;">{items_html}</ul>'
         return (
             f'<div style="margin-bottom:10px;">'
             f'<span style="background:{color};color:#fff;padding:2px 8px;border-radius:4px;'
             f'font-size:12px;font-weight:bold;">{label}</span> '
             f'<strong style="font-size:15px;">{name}</strong>'
             f'{loc_line}'
-            f'<div style="color:#555;font-size:13px;margin-top:2px;">{why}</div>'
+            f'{dishes_line}'
             f'</div>'
         )
 

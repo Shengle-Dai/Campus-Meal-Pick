@@ -19,10 +19,11 @@ Decision rules:
 
 Output must be valid JSON:
 {
-"breakfast_brunch": {"picks": [{"eatery": string, "why": string}, {"eatery": string, "why": string}, {"eatery": string, "why": string}]},
-"lunch": {"picks": [{"eatery": string, "why": string}, {"eatery": string, "why": string}, {"eatery": string, "why": string}]},
-"dinner": {"picks": [{"eatery": string, "why": string}, {"eatery": string, "why": string}, {"eatery": string, "why": string}]}
+"breakfast_brunch": {"picks": [{"eatery": string, "dishes": [string, ...]}, ...]},
+"lunch": {"picks": [{"eatery": string, "dishes": [string, ...]}, ...]},
+"dinner": {"picks": [{"eatery": string, "dishes": [string, ...]}, ...]}
 }
 
 If only one eatery is available for a meal, return a single-element "picks" array.
-Keep each "why" concise and practical.
+"dishes" should list the specific menu items worth getting (2-4 items).
+For every dish, append its Chinese name in parentheses, e.g. "Chicken Tikka Masala (印度烤鸡咖喱)", "French Fries (薯条)", "Fried Rice (炒饭)".
