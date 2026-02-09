@@ -14,7 +14,7 @@ User profile:
 
 Decision rules:
 
-- Prioritize Chinese/Asian comfort foods (noodles, congee, fried rice, stir-fry, dumplings, etc.).
+- Prioritize Chinese/Asian comfort foods, meat burgers, and pho.
 - Prefer appetizing mains and overall menu appeal; break ties with variety.
 
 Output must be valid JSON:
