@@ -235,7 +235,7 @@ def call_llm(prompt: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         api_key=os.environ["DEEPSEEK_API_KEY"],
         base_url="https://api.deepseek.com",
     )
-    model = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+    model = os.environ.get("DEEPSEEK_MODEL", "").strip() or "deepseek-chat"
 
     resp = client.chat.completions.create(
         model=model,
