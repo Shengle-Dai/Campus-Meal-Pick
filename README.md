@@ -2,6 +2,13 @@
 
 Automated daily AI-powered dining recommendations (top 3 picks per meal) from Cornell West Campus eateries, delivered via email.
 
+## How it works
+
+1. **Scrape** — Launches headless Chromium via Playwright, navigates to `now.dining.cornell.edu/eateries`, clicks the "West" campus tab, and extracts each dining hall's meal menus (categories + individual dishes)
+2. **Analyze** — Sends the scraped menu data to DeepSeek LLM with a customizable system prompt (`prompt.md`) that encodes food preferences and decision rules
+3. **Rank** — LLM returns JSON with top 3 eatery picks per meal (breakfast/brunch, lunch, dinner), each with recommended dishes
+4. **Email** — Formats the picks into a styled HTML email and sends via Gmail SMTP
+
 ## Setup
 
 ### Prerequisites
@@ -14,6 +21,7 @@ Automated daily AI-powered dining recommendations (top 3 picks per meal) from Co
 
 ```bash
 pip install -r requirements.txt
+python -m playwright install chromium
 ```
 
 ### Environment variables
@@ -61,5 +69,4 @@ Store the environment variables as repository secrets in GitHub.
 
 - **`prompt.md`** — LLM system prompt controlling food preferences and recommendation style
 - **Meal time windows** — defined in `recommend_daily.py` (`MEAL_WINDOWS`); defaults are 6-11 AM, 11 AM-4 PM, 4-9 PM Eastern
-- **Campus area filter** — `CAMPUS_AREA_ALLOWLIST` in `recommend_daily.py` (default: West)
 - **Eatery denylist** — `EATERY_DENYLIST` in `recommend_daily.py` to exclude specific eateries
