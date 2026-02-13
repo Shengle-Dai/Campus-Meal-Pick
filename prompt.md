@@ -24,6 +24,7 @@ Output must be valid JSON:
 "dinner": {"picks": [{"eatery": string, "dishes": [string, ...]}, ...]}
 }
 
-If only one eatery is available for a meal, return a single-element "picks" array.
-"dishes" should list the specific menu items worth getting (2-4 items).
+Each pick MUST be a different eatery — never repeat the same eatery within a meal.
+If fewer than 3 eateries are available for a meal, return only as many picks as there are distinct eateries.
+"dishes" should list the specific menu items worth getting (aim for 4, but fewer is fine if the menu is limited).
 For every dish, append its Chinese name in parentheses, e.g. "Chicken Tikka Masala (印度烤鸡咖喱)", "French Fries (薯条)", "Fried Rice (炒饭)".

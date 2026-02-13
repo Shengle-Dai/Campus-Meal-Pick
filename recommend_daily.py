@@ -208,6 +208,50 @@ def call_llm(prompt: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     return json.loads(text)
 
 
+def sanitize_result(
+    result: Any, menus: Dict[str, List[MenuSlice]]
+) -> Dict[str, Any]:
+    """Validate and fix LLM output: enforce structure, dedupe eateries, cap picks."""
+    if not isinstance(result, dict):
+        result = {}
+
+    valid_eateries: Dict[str, set] = {}
+    for bucket, slices in menus.items():
+        valid_eateries[bucket] = {ms.eatery_name for ms in slices}
+
+    for bucket in MEAL_BUCKETS:
+        meal = result.get(bucket)
+        if not isinstance(meal, dict):
+            result[bucket] = {"picks": []}
+            continue
+
+        picks = meal.get("picks")
+        if not isinstance(picks, list):
+            meal["picks"] = []
+            continue
+
+        # Deduplicate eateries and ensure each pick has required fields
+        seen: set = set()
+        clean: list = []
+        for p in picks:
+            if not isinstance(p, dict):
+                continue
+            eatery = p.get("eatery", "")
+            if not isinstance(eatery, str) or not eatery:
+                continue
+            if eatery in seen:
+                continue
+            seen.add(eatery)
+            dishes = p.get("dishes", [])
+            if not isinstance(dishes, list):
+                dishes = []
+            clean.append({"eatery": eatery, "dishes": [str(d) for d in dishes]})
+
+        meal["picks"] = clean[:3]
+
+    return result
+
+
 def build_email(
     local_dt: datetime, result: Dict[str, Any], menus: Dict[str, List[MenuSlice]]
 ) -> Tuple[str, str]:
@@ -330,6 +374,7 @@ async def main() -> int:
     }
 
     result = call_llm(prompt, payload)
+    result = sanitize_result(result, menus)
     subject, body = build_email(local_dt, result, menus)
     send_email(subject, body)
     print("Email sent.")
