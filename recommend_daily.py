@@ -5,9 +5,10 @@ import json
 import re
 import smtplib
 from dataclasses import dataclass
-from datetime import datetime, timezone, date, time as dtime
+from datetime import datetime
 from email.message import EmailMessage
-from typing import Any, Dict, List, Optional, Tuple
+from html import escape
+from typing import Any, Dict, List, Tuple
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -24,14 +25,7 @@ except ImportError:
 LOCAL_TZ = ZoneInfo("America/New_York")
 
 EATERY_DENYLIST = {"104West!"}
-PROMPT_PATH = "prompt.md"
-
-# "Today" meal windows (local time). Adjust if desired.
-MEAL_WINDOWS = {
-    "breakfast_brunch": (dtime(6, 0), dtime(11, 0)),
-    "lunch": (dtime(11, 0), dtime(16, 0)),
-    "dinner": (dtime(16, 0), dtime(21, 0)),
-}
+PROMPT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompt.md")
 
 # Map meal title (with " Menu" stripped) to our three buckets
 EVENT_BUCKET = {
@@ -40,7 +34,6 @@ EVENT_BUCKET = {
     "Lunch": "lunch",
     "Late Lunch": "lunch",
     "Dinner": "dinner",
-    "Late Night": "dinner",
 }
 
 
@@ -60,8 +53,11 @@ def load_prompt() -> str:
         return f.read().strip()
 
 
+MEAL_BUCKETS = ("breakfast_brunch", "lunch", "dinner")
+
+
 async def scrape_menus(local_dt: datetime) -> Dict[str, List[MenuSlice]]:
-    by_bucket: Dict[str, List[MenuSlice]] = {k: [] for k in MEAL_WINDOWS}
+    by_bucket: Dict[str, List[MenuSlice]] = {k: [] for k in MEAL_BUCKETS}
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -117,9 +113,11 @@ async def scrape_menus(local_dt: datetime) -> Dict[str, List[MenuSlice]]:
                     if not bucket:
                         continue
 
-                    # Click to expand the panel to reveal menu content
-                    await panel.click()
-                    await page.wait_for_timeout(300)
+                    # Expand the panel if not already expanded
+                    panel_classes = await panel.get_attribute("class") or ""
+                    if "mat-expanded" not in panel_classes:
+                        await panel.click()
+                        await page.wait_for_timeout(300)
 
                     # Extract categories
                     cat_els = await panel.locator(".eateries-menu-category").all()
@@ -176,7 +174,8 @@ async def scrape_menus(local_dt: datetime) -> Dict[str, List[MenuSlice]]:
                             menu_summary=menu_summary,
                         )
                     )
-            except Exception:
+            except Exception as e:
+                print(f"WARNING: skipped card: {e}", file=sys.stderr)
                 continue
 
         await browser.close()
@@ -186,10 +185,10 @@ async def scrape_menus(local_dt: datetime) -> Dict[str, List[MenuSlice]]:
 
 def call_llm(prompt: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     client = OpenAI(
-        api_key=os.environ["DEEPSEEK_API_KEY"],
-        base_url="https://api.deepseek.com",
+        api_key=os.environ["GROQ_API_KEY"],
+        base_url="https://api.groq.com/openai/v1/",
     )
-    model = os.environ.get("DEEPSEEK_MODEL", "").strip() or "deepseek-chat"
+    model = os.environ.get("GROQ_MODEL", "").strip() or "openai/gpt-oss-120b"
 
     resp = client.chat.completions.create(
         model=model,
@@ -204,6 +203,8 @@ def call_llm(prompt: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     text = resp.choices[0].message.content
+    if not text:
+        raise RuntimeError("LLM returned empty response")
     return json.loads(text)
 
 
@@ -226,17 +227,18 @@ def build_email(
     ]
 
     def _pick_html(rank: int, pick: Dict[str, Any]) -> str:
-        name = pick.get("eatery", "")
+        raw_name = pick.get("eatery", "")
+        name = escape(raw_name)
         dishes = pick.get("dishes", [])
         labels = {0: "#1 Pick", 1: "#2 Pick", 2: "#3 Pick"}
         colors = {0: "#d35400", 1: "#7f8c8d", 2: "#7f8c8d"}
         label = labels.get(rank, f"#{rank+1} Pick")
         color = colors.get(rank, "#7f8c8d")
-        location = loc.get(name, "")
+        location = escape(loc.get(raw_name, ""))
         loc_line = f'<div style="color:#888;font-size:13px;">{location}</div>' if location else ""
         dishes_line = ""
         if dishes:
-            items_html = "".join(f"<li>{d}</li>" for d in dishes)
+            items_html = "".join(f"<li>{escape(d)}</li>" for d in dishes)
             dishes_line = f'<ul style="color:#555;font-size:13px;margin:4px 0 0 0;padding-left:20px;">{items_html}</ul>'
         return (
             f'<div style="margin-bottom:10px;">'
