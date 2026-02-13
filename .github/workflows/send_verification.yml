@@ -31,6 +31,7 @@ jobs:
           to_email   = os.environ['TARGET_EMAIL']
           confirm_url = os.environ['CONFIRM_URL']
 
+          html = f'''
           <div style=\"font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:40px 20px;text-align:center;\">
             <h1 style=\"font-family:'Palatino Linotype','Book Antiqua',Palatino,serif;font-size:24px;color:#B31B1B;margin:0 0 24px 0;font-weight:600;\">
               Daily Dining Picks
