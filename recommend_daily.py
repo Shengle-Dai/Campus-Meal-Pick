@@ -438,6 +438,53 @@ def send_emails(
             print(f"  → Sent to {recipient}")
 
 
+def store_daily_picks(
+    result: Dict[str, Any],
+    menus: Dict[str, List[MenuSlice]],
+    local_dt: datetime,
+) -> None:
+    """Store daily picks in Cloudflare KV via Worker API."""
+    worker_url = os.environ.get("WORKER_BASE_URL", "").strip().rstrip("/")
+    hmac_secret = os.environ.get("HMAC_SECRET", "").strip()
+
+    if not worker_url or not hmac_secret:
+        print("WARNING: WORKER_BASE_URL or HMAC_SECRET not set; skipping KV store.", file=sys.stderr)
+        return
+
+    # Build location map
+    loc_map = {}
+    for bucket, lst in menus.items():
+        for ms in lst:
+            loc_map[ms.eatery_name] = ms.location
+
+    payload = {
+        "date_str": local_dt.strftime("%a, %b %d"),
+        "meals": result,
+        "location_map": loc_map,
+    }
+
+    import urllib.request
+
+    req = urllib.request.Request(
+        f"{worker_url}/api/store_picks",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {hmac_secret}",
+            "User-Agent": "CampusMealPick-Daily/1.0",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status == 200:
+                print("Successfully stored daily picks in KV.")
+            else:
+                print(f"WARNING: Worker returned status {resp.status} for store_picks.", file=sys.stderr)
+    except Exception as e:
+        print(f"WARNING: failed to store picks in KV: {e}", file=sys.stderr)
+
+
 async def main() -> int:
     local_dt = datetime.now(LOCAL_TZ)
 
@@ -467,6 +514,7 @@ async def main() -> int:
     result = call_llm(prompt, payload)
     result = sanitize_result(result, menus)
     subject, _ = build_email(local_dt, result, menus)
+    store_daily_picks(result, menus, local_dt)
     send_emails(subject, result, menus, local_dt)
     print("All emails sent.")
     return 0

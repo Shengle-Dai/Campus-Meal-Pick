@@ -2,13 +2,17 @@
  * Campus Meal Pick (CMP) Subscribe/Unsubscribe Worker
  *
  * Endpoints:
- *   GET  /                     — Subscribe form
+ *   GET  /                     — Subscribe form (renders daily picks if available)
  *   POST /api/subscribe        — Start subscribe flow (triggers verification email)
  *   GET  /api/confirm          — Confirm subscription (verifies HMAC token)
  *   GET  /api/unsubscribe      — Remove subscription (verifies HMAC token)
  *   GET  /api/subscribers      — List confirmed subscribers (internal, requires auth)
+ *   POST /api/store_picks      — Store daily picks JSON (internal, requires auth)
  *
- * KV keys: "sub:<email>" → JSON { subscribedAt }
+ * KV keys: 
+ *   "sub:<email>" → JSON { subscribedAt }
+ *   "latest_picks" → JSON { date_str, meals, location_map }
+ *
  * Secrets: HMAC_SECRET, GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO
  */
 
@@ -242,9 +246,13 @@ function pageShell(title, content) {
       margin: 0 0 16px;
       font-weight: 600;
       letter-spacing: -0.01em;
+      border-bottom: 1px solid #e67e22;
+      padding-bottom: 4px;
+      display: inline-block;
     }
     .pick-item {
       margin-bottom: 16px;
+      page-break-inside: avoid;
     }
     .pick-header {
       font-size: 13px;
@@ -256,30 +264,33 @@ function pageShell(title, content) {
       gap: 6px;
     }
     .pick-rank {
-      color: var(--cornell-red);
       font-size: 11px;
-      background: rgba(179, 27, 27, 0.06);
+      color: #fff;
       padding: 2px 6px;
       border-radius: 4px;
+      font-weight: bold;
+    }
+    /* Rank colors matching email */
+    .rank-0 { background-color: #d35400; }
+    .rank-1 { background-color: #7f8c8d; }
+    .rank-2 { background-color: #7f8c8d; }
+    
+    .pick-location {
+      font-size: 12px;
+      color: #888;
+      font-weight: normal;
+      margin-left: auto;
     }
     .pick-menu {
       font-size: 13px;
-      color: #666;
+      color: #555;
       line-height: 1.4;
-      margin: 0;
-      padding-left: 0;
-      list-style: none;
+      margin: 4px 0 0 0;
+      padding-left: 20px;
+      list-style: disc;
     }
     .pick-menu li {
       margin-bottom: 2px;
-      position: relative;
-      padding-left: 12px;
-    }
-    .pick-menu li::before {
-      content: "•";
-      position: absolute;
-      left: 0;
-      color: #ddd;
     }
     
     @keyframes fadeUp {
@@ -302,7 +313,84 @@ const icons = {
   info: `<div class="icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>`
 };
 
-function subscribePage() {
+function renderPicksHtml(picksData) {
+  if (!picksData) return "";
+
+  const { date_str, meals, location_map } = picksData;
+  // expects structure:
+  // {
+  //   date_str: "Fri, Feb 13",
+  //   meals: {
+  //     "breakfast_brunch": { picks: [...] },
+  //     "lunch": { picks: [...] },
+  //     "dinner": { picks: [...] }
+  //   },
+  //   location_map: { "Eatery Name": "Location" }
+  // }
+
+  const mealLabels = [
+    { key: "breakfast_brunch", title: "Breakfast / Brunch" },
+    { key: "lunch", title: "Lunch" },
+    { key: "dinner", title: "Dinner" },
+  ];
+
+  let sectionsHtml = "";
+
+  for (const { key, title } of mealLabels) {
+    const mealObj = meals && meals[key] ? meals[key] : {};
+    const picks = mealObj.picks || [];
+
+    if (picks.length === 0) continue;
+
+    let itemsHtml = "";
+    picks.slice(0, 3).forEach((pick, index) => {
+      const rank = index + 1;
+      const dishes = pick.dishes || [];
+      const eatery = pick.eatery || "";
+      const location = (location_map && location_map[eatery]) || "";
+      
+      const dishesList = dishes.map(d => `<li>${d}</li>`).join("");
+      
+      itemsHtml += `
+        <div class="pick-item">
+          <div class="pick-header">
+            <span class="pick-rank rank-${index}">#${rank} Pick</span>
+            <strong>${eatery}</strong>
+            ${location ? `<span class="pick-location">${location}</span>` : ""}
+          </div>
+          <ul class="pick-menu">
+            ${dishesList}
+          </ul>
+        </div>
+      `;
+    });
+
+    sectionsHtml += `
+      <div class="meal-section">
+        <h2 class="meal-title">${title}</h2>
+        ${itemsHtml}
+      </div>
+    `;
+  }
+
+  if (!sectionsHtml) return "";
+
+  return `
+    <div class="email-preview">
+      <div class="email-card">
+        <div class="email-meta">
+          <span>${date_str || "Recently"}</span>
+          <span>Sample Email</span>
+        </div>
+        ${sectionsHtml}
+      </div>
+    </div>
+  `;
+}
+
+function subscribePage(picksData) {
+  const picksHtml = renderPicksHtml(picksData);
+
   return pageShell(
     "Campus Meal Pick",
     `
@@ -346,41 +434,7 @@ function subscribePage() {
       </div>
     </div>
 
-    <!-- Email Preview -->
-    <div class="email-preview">
-      <div class="email-card">
-        <div class="email-meta">
-          <span>Fri, Feb 13</span>
-          <span>Sample Email</span>
-        </div>
-        
-        <div class="meal-section">
-          <h2 class="meal-title">Lunch</h2>
-          
-          <div class="pick-item">
-            <div class="pick-header">
-              <span class="pick-rank">#1</span>
-              <span>Becker House</span>
-            </div>
-            <ul class="pick-menu">
-              <li>Sweet Chili Chicken Drumsticks</li>
-              <li>Tofu & Vegetable Lo Mein</li>
-            </ul>
-          </div>
-
-          <div class="pick-item">
-            <div class="pick-header">
-              <span class="pick-rank">#2</span>
-              <span>Bethe House</span>
-            </div>
-            <ul class="pick-menu">
-              <li>Sweet & Sour Pork</li>
-              <li>Orange Tofu Stir Fry</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
+    ${picksHtml}
     `
   );
 }
@@ -578,6 +632,30 @@ async function handleListSubscribers(request, env) {
   return Response.json({ subscribers });
 }
 
+async function handleStorePicks(request, env) {
+  // Protected endpoint to store daily picks JSON
+  const authHeader = request.headers.get("Authorization") || "";
+  const expected = `Bearer ${env.HMAC_SECRET}`;
+  if (authHeader !== expected) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const picks = await request.json();
+    if (!picks || !picks.date_str || !picks.meals) {
+        return Response.json({ error: "Invalid payload structure" }, { status: 400 });
+    }
+
+    // cache for 24 hours (86400 seconds) or indefinite
+    // We'll just put it in KV.
+    await env.SUBSCRIBERS.put("latest_picks", JSON.stringify(picks));
+    
+    return Response.json({ success: true, stored_date: picks.date_str });
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 });
+  }
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 export default {
@@ -598,7 +676,15 @@ export default {
 
     try {
       if (path === "/" && request.method === "GET") {
-        return new Response(subscribePage(), {
+        // Try to fetch latest picks to render the preview
+        let picks = null;
+        try {
+          picks = await env.SUBSCRIBERS.get("latest_picks", { type: "json" });
+        } catch (e) {
+          console.error("Failed to load picks:", e);
+        }
+
+        return new Response(subscribePage(picks), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -617,6 +703,10 @@ export default {
 
       if (path === "/api/subscribers" && request.method === "GET") {
         return await handleListSubscribers(request, env);
+      }
+
+      if (path === "/api/store_picks" && request.method === "POST") {
+        return await handleStorePicks(request, env);
       }
 
       return new Response("Not Found", { status: 404 });
